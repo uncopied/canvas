@@ -12,7 +12,7 @@ import (
 	"github.com/tdewolff/canvas/text"
 )
 
-// FontStyle defines the font style to be used for the font.
+// FontStyle defines the font style to be used for the font. It specifies a boldness with optionally italic, e.g. FontBlack | FontItalic will specify a black boldness (a font-weight of 800 in CSS) and italic.
 type FontStyle int
 
 // see FontStyle
@@ -40,7 +40,7 @@ const (
 	FontSmallcaps
 )
 
-// Font defines a font of type TTF or OTF which which a FontFace can be generated for use in text drawing operations.
+// Font defines an SFNT font such as TTF or OTF.
 type Font struct {
 	*font.SFNT
 	name        string
@@ -72,6 +72,7 @@ func parseFont(name string, b []byte, index int) (*Font, error) {
 	return font, nil
 }
 
+// Destroy should be called when using HarfBuzz to free the C resources.
 func (f *Font) Destroy() {
 	f.shaper.Destroy()
 }
@@ -81,6 +82,7 @@ func (f *Font) Name() string {
 	return f.name
 }
 
+// SubsetID maps a glyphID of the original font to the subsetted font. If the glyphID is not subsetted, it will be added to the map.
 func (f *Font) SubsetID(glyphID uint16) uint16 {
 	if subsetGlyphID, ok := f.subsetIDMap[glyphID]; ok {
 		return subsetGlyphID
@@ -91,25 +93,30 @@ func (f *Font) SubsetID(glyphID uint16) uint16 {
 	return subsetGlyphID
 }
 
+// SubsetIDs returns all subsetted IDs in the order of appearance.
 func (f *Font) SubsetIDs() []uint16 {
 	return f.subsetIDs
 }
 
+// SetVariations sets the font variations (not yet supported).
 func (f *Font) SetVariations(variations string) {
+	// TODO: support font variations
 	f.variations = variations
 }
 
+// SetFeatures sets the font features (not yet supported).
 func (f *Font) SetFeatures(features string) {
+	// TODO: support font features
 	f.features = features
 }
 
-// FontFamily contains a family of fonts (bold, italic, ...). Selecting an italic style will pick the native italic font or use faux italic if not present.
+// FontFamily contains a family of fonts (bold, italic, ...). Allowing to select an italic style as the native italic font or to use faux italic if not present.
 type FontFamily struct {
 	name  string
 	fonts map[FontStyle]*Font
 }
 
-// NewFontFamily returns a new FontFamily.
+// NewFontFamily returns a new font family.
 func NewFontFamily(name string) *FontFamily {
 	return &FontFamily{
 		name:  name,
@@ -117,25 +124,28 @@ func NewFontFamily(name string) *FontFamily {
 	}
 }
 
+// Destroy should be called when using HarfBuzz to free the C resources.
 func (family *FontFamily) Destroy() {
 	for _, font := range family.fonts {
 		font.Destroy()
 	}
 }
 
+// SetVariations sets the font variations (not yet supported).
 func (family *FontFamily) SetVariations(variations string) {
 	for _, font := range family.fonts {
 		font.SetVariations(variations)
 	}
 }
 
+// SetFeatures sets the font features (not yet supported).
 func (family *FontFamily) SetFeatures(features string) {
 	for _, font := range family.fonts {
 		font.SetFeatures(features)
 	}
 }
 
-// LoadLocalFont loads a font from the system fonts location.
+// LoadLocalFont loads a font from the system's fonts.
 func (family *FontFamily) LoadLocalFont(name string, style FontStyle) error {
 	match := name
 	if style&FontExtraLight == FontExtraLight {
@@ -193,7 +203,7 @@ func (family *FontFamily) LoadFont(b []byte, index int, style FontStyle) error {
 	return nil
 }
 
-// Face gets the font face given by the font size (in pt).
+// Face gets the font face given by the font size in points and its style.
 func (family *FontFamily) Face(size float64, col color.Color, style FontStyle, variant FontVariant, deco ...FontDecorator) *FontFace {
 	face := &FontFace{}
 	face.Font = family.fonts[style]
@@ -238,7 +248,7 @@ func (family *FontFamily) Face(size float64, col color.Color, style FontStyle, v
 		if style&0xFF == FontExtraLight {
 			style = style&0x100 | FontLight
 		} else if style&0xFF == FontLight || style&0xFF == FontBook {
-			style = style&0x100 | FontRegular
+			style = style & 0x100
 		} else if style&0xFF == FontRegular {
 			style = style&0x100 | FontSemibold
 		} else if style&0xFF == FontMedium || style&0xFF == FontSemibold {
@@ -288,7 +298,7 @@ func (family *FontFamily) Face(size float64, col color.Color, style FontStyle, v
 	return face
 }
 
-// FontFace defines a font face from a given font. It allows setting the font size, its color, faux styles and font decorations.
+// FontFace defines a font face from a given font. It specifies the font size, color, faux styles and font decorations.
 type FontFace struct {
 	Font *Font
 
@@ -315,23 +325,22 @@ type FontFace struct {
 	mmPerEm float64
 }
 
-// Equals returns true when two font face are equal. In particular this allows two adjacent text spans that use the same decoration to allow the decoration to span both elements instead of two separately.
+// Equals returns true when two font face are equal.
 func (face *FontFace) Equals(other *FontFace) bool {
 	return reflect.DeepEqual(face, other)
-	//return face.Font == other.Font && face.Size == other.Size && face.Style == other.Style && face.Variant == other.Variant && face.Color == other.Color && reflect.DeepEqual(face.Deco, other.Deco) && face.Language == other.Language && face.Script == other.Script && face.Direction == other.Direction
 }
 
-// Name returns the name of the underlying font
+// Name returns the name of the underlying font.
 func (face *FontFace) Name() string {
 	return face.Font.name
 }
 
+// HasDecoration returns true if the font face has decorations enabled.
 func (face *FontFace) HasDecoration() bool {
 	return 0 < len(face.Deco)
 }
 
-// FontMetrics contains a number of metrics that define a font face.
-// See https://developer.apple.com/library/archive/documentation/TextFonts/Conceptual/CocoaTextArchitecture/Art/glyph_metrics_2x.png for an explanation of the different metrics.
+// FontMetrics contains a number of metrics that define a font face. See https://developer.apple.com/library/archive/documentation/TextFonts/Conceptual/CocoaTextArchitecture/Art/glyph_metrics_2x.png for an explanation of the different metrics.
 type FontMetrics struct {
 	LineHeight float64
 	Ascent     float64
@@ -361,18 +370,13 @@ func (face *FontFace) Metrics() FontMetrics {
 	}
 }
 
+// PPEM returns the pixels-per-EM for a given resolution of the font face.
 func (face *FontFace) PPEM(resolution Resolution) uint16 {
 	// ppem is for hinting purposes only, this does not influence glyph advances
 	return uint16(resolution.DPMM() * face.Size)
 }
 
-// Kerning returns the eventual kerning between two runes in mm (ie. the adjustment on the advance).
-func (face *FontFace) Kerning(left, right rune) float64 {
-	sfnt := face.Font.SFNT
-	return face.mmPerEm * float64(sfnt.Kerning(sfnt.GlyphIndex(left), sfnt.GlyphIndex(right)))
-}
-
-// TextWidth returns the width of a given string in mm.
+// TextWidth returns the width of a given string in millimeters.
 func (face *FontFace) TextWidth(s string) float64 {
 	ppem := face.PPEM(DefaultResolution)
 	glyphs := face.Font.shaper.Shape(s, ppem, face.Direction, face.Script, face.Language, face.Font.features, face.Font.variations)
@@ -391,7 +395,7 @@ func (face *FontFace) textWidth(glyphs []text.Glyph) float64 {
 	return face.mmPerEm * float64(w)
 }
 
-// Decorate will return a path from the decorations specified in the FontFace over a given width in mm.
+// Decorate will return the decoration path over a given width in millimeters.
 func (face *FontFace) Decorate(width float64) *Path {
 	p := &Path{}
 	if face.Deco != nil {
@@ -402,6 +406,7 @@ func (face *FontFace) Decorate(width float64) *Path {
 	return p
 }
 
+// ToPath converts a string to its glyph paths.
 func (face *FontFace) ToPath(s string) (*Path, float64, error) {
 	ppem := face.PPEM(DefaultResolution)
 	glyphs := face.Font.shaper.Shape(s, ppem, face.Direction, face.Script, face.Language, face.Font.features, face.Font.variations)
@@ -429,6 +434,7 @@ func (face *FontFace) toPath(glyphs []text.Glyph, ppem uint16) (*Path, float64, 
 	return p, face.mmPerEm * float64(x), nil
 }
 
+// Boldness returns the CSS boldness value for the font face.
 func (face *FontFace) Boldness() int {
 	boldness := 400
 	if face.Style&0xFF == FontExtraLight {
@@ -453,7 +459,7 @@ func (face *FontFace) Boldness() int {
 
 ////////////////////////////////////////////////////////////////
 
-// FontDecorator is an interface that returns a path given a font face and a width in mm.
+// FontDecorator is an interface that returns a path given a font face and a width in millimeters.
 type FontDecorator interface {
 	Decorate(*FontFace, float64) *Path
 }
@@ -461,7 +467,7 @@ type FontDecorator interface {
 const underlineDistance = 0.075
 const underlineThickness = 0.05
 
-// FontUnderline is a font decoration that draws a line under the text at the base line.
+// FontUnderline is a font decoration that draws a line under the text.
 var FontUnderline FontDecorator = underline{}
 
 type underline struct{}
@@ -487,7 +493,7 @@ func (underline) String() string {
 	return "Underline"
 }
 
-// FontOverline is a font decoration that draws a line over the text at the X-Height line.
+// FontOverline is a font decoration that draws a line over the text.
 var FontOverline FontDecorator = overline{}
 
 type overline struct{}
@@ -513,7 +519,7 @@ func (overline) String() string {
 	return "Overline"
 }
 
-// FontStrikethrough is a font decoration that draws a line through the text in the middle between the base and X-Height line.
+// FontStrikethrough is a font decoration that draws a line through the text.
 var FontStrikethrough FontDecorator = strikethrough{}
 
 type strikethrough struct{}
@@ -542,7 +548,7 @@ func (strikethrough) String() string {
 	return "Strikethrough"
 }
 
-// FontDoubleUnderline is a font decoration that draws two lines at the base line.
+// FontDoubleUnderline is a font decoration that draws two lines under the text.
 var FontDoubleUnderline FontDecorator = doubleUnderline{}
 
 type doubleUnderline struct{}
@@ -570,7 +576,7 @@ func (doubleUnderline) String() string {
 	return "DoubleUnderline"
 }
 
-// FontDottedUnderline is a font decoration that draws a dotted line at the base line.
+// FontDottedUnderline is a font decoration that draws a dotted line under the text.
 var FontDottedUnderline FontDecorator = dottedUnderline{}
 
 type dottedUnderline struct{}
@@ -608,7 +614,7 @@ func (dottedUnderline) String() string {
 	return "DottedUnderline"
 }
 
-// FontDashedUnderline is a font decoration that draws a dashed line at the base line.
+// FontDashedUnderline is a font decoration that draws a dashed line under the text.
 var FontDashedUnderline FontDecorator = dashedUnderline{}
 
 type dashedUnderline struct{}
@@ -641,7 +647,7 @@ func (dashedUnderline) String() string {
 	return "DashedUnderline"
 }
 
-// FontWavyUnderline is a font decoration that draws a wavy path at the base line.
+// FontWavyUnderline is a font decoration that draws a wavy path under the text.
 var FontWavyUnderline FontDecorator = wavyUnderline{}
 
 type wavyUnderline struct{}
@@ -686,7 +692,7 @@ func (wavyUnderline) String() string {
 	return "WavyUnderline"
 }
 
-// FontSineUnderline is a font decoration that draws a wavy sine path at the base line.
+// FontSineUnderline is a font decoration that draws a wavy sine path under the text.
 var FontSineUnderline FontDecorator = sineUnderline{}
 
 type sineUnderline struct{}
@@ -729,7 +735,7 @@ func (sineUnderline) String() string {
 	return "SineUnderline"
 }
 
-// FontSawtoothUnderline is a font decoration that draws a wavy sawtooth path at the base line.
+// FontSawtoothUnderline is a font decoration that draws a wavy sawtooth path under the text.
 var FontSawtoothUnderline FontDecorator = sawtoothUnderline{}
 
 type sawtoothUnderline struct{}

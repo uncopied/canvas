@@ -13,8 +13,10 @@ import (
 	"golang.org/x/text/transform"
 )
 
+// MaxCmapSegments is the maximum number of cmap segments that will be accepted.
 const MaxCmapSegments = 20000
 
+// Pather is an interface to append a glyph's path to canvas.Path.
 type Pather interface {
 	MoveTo(float64, float64)
 	LineTo(float64, float64)
@@ -23,12 +25,15 @@ type Pather interface {
 	Close()
 }
 
+// Hinting specifies the type of hinting to use (none supported yes).
 type Hinting int
 
+// see Hinting
 const (
 	NoHinting Hinting = iota
 )
 
+// SFNT is a parsed OpenType font.
 type SFNT struct {
 	Data              []byte
 	Version           string
@@ -55,6 +60,7 @@ type SFNT struct {
 	// optional
 	Kern *kernTable
 	Vhea *vheaTable
+	//Hdmx *hdmxTable // TODO
 	Vmtx *vmtxTable
 	//Gpos *gposTable // TODO
 	//Gsub *gsubTable // TODO
@@ -62,18 +68,22 @@ type SFNT struct {
 	//Base *baseTable // TODO
 }
 
+// NumGlyphs returns the number of glyphs the font contains.
 func (sfnt *SFNT) NumGlyphs() uint16 {
 	return sfnt.Maxp.NumGlyphs
 }
 
+// GlyphIndex returns the glyphID for a given rune.
 func (sfnt *SFNT) GlyphIndex(r rune) uint16 {
 	return sfnt.Cmap.Get(r)
 }
 
+// GlyphName returns the name of the glyph.
 func (sfnt *SFNT) GlyphName(glyphID uint16) string {
 	return sfnt.Post.Get(glyphID)
 }
 
+// GlyphPath draws the glyph's contour as a path to the pather interface. It will use the specified ppem (pixels-per-EM) for hinting purposes. The path is draws to the (x,y) coordinate and scaled using the given scale factor.
 func (sfnt *SFNT) GlyphPath(p Pather, glyphID, ppem uint16, x, y int32, scale float64, hinting Hinting) error {
 	if sfnt.IsTrueType {
 		return sfnt.Glyf.ToPath(p, glyphID, ppem, x, y, scale, hinting)
@@ -83,10 +93,12 @@ func (sfnt *SFNT) GlyphPath(p Pather, glyphID, ppem uint16, x, y int32, scale fl
 	return fmt.Errorf("only TrueType and CFF are supported")
 }
 
+// GlyphAdvance returns the advance width of the glyph.
 func (sfnt *SFNT) GlyphAdvance(glyphID uint16) uint16 {
 	return sfnt.Hmtx.Advance(glyphID)
 }
 
+// GlyphVerticalAdvance returns the vertical advance width of the glyph.
 func (sfnt *SFNT) GlyphVerticalAdvance(glyphID uint16) uint16 {
 	if sfnt.Vmtx == nil {
 		return sfnt.Head.UnitsPerEm
@@ -94,6 +106,7 @@ func (sfnt *SFNT) GlyphVerticalAdvance(glyphID uint16) uint16 {
 	return sfnt.Vmtx.Advance(glyphID)
 }
 
+// Kerning returns the kerning between two glyphs, i.e. the advance correction for glyph pairs.
 func (sfnt *SFNT) Kerning(left, right uint16) int16 {
 	if sfnt.Kern == nil {
 		return 0
@@ -101,12 +114,13 @@ func (sfnt *SFNT) Kerning(left, right uint16) int16 {
 	return sfnt.Kern.Get(left, right)
 }
 
+// ParseSFNT parses an OpenType file format (TTF, OTF, TTC). The index is used for font collections to select a single font.
 func ParseSFNT(b []byte, index int) (*SFNT, error) {
 	if len(b) < 12 || math.MaxUint32 < len(b) {
 		return nil, ErrInvalidFontData
 	}
 
-	r := newBinaryReader(b)
+	r := NewBinaryReader(b)
 	sfntVersion := r.ReadString(4)
 	if sfntVersion == "ttcf" {
 		majorVersion := r.ReadUint16()
@@ -225,7 +239,7 @@ func ParseSFNT(b []byte, index int) (*SFNT, error) {
 	}
 
 	tableNames := make([]string, len(tables))
-	for tableName, _ := range tables {
+	for tableName := range tables {
 		tableNames = append(tableNames, tableName)
 	}
 	sort.Strings(tableNames)
@@ -449,7 +463,7 @@ func (sfnt *SFNT) parseCmap() error {
 	}
 
 	sfnt.Cmap = &cmapTable{}
-	r := newBinaryReader(b)
+	r := NewBinaryReader(b)
 	if r.ReadUint16() != 0 {
 		return fmt.Errorf("cmap: bad version")
 	}
@@ -476,7 +490,7 @@ func (sfnt *SFNT) parseCmap() error {
 		}
 
 		// extract subtable length
-		rs := newBinaryReader(b[offset:])
+		rs := NewBinaryReader(b[offset:])
 		format := rs.ReadUint16()
 		var length uint32
 		if format == 0 || format == 2 || format == 4 || format == 6 {
@@ -677,7 +691,7 @@ func (sfnt *SFNT) parseHead() error {
 	}
 
 	sfnt.Head = &headTable{}
-	r := newBinaryReader(b)
+	r := NewBinaryReader(b)
 	majorVersion := r.ReadUint16()
 	minorVersion := r.ReadUint16()
 	if majorVersion != 1 && minorVersion != 0 {
@@ -688,7 +702,7 @@ func (sfnt *SFNT) parseHead() error {
 	if r.ReadUint32() != 0x5F0F3CF5 { // magicNumber
 		return fmt.Errorf("head: bad magic version")
 	}
-	sfnt.Head.Flags = uint16ToFlags(r.ReadUint16())
+	sfnt.Head.Flags = Uint16ToFlags(r.ReadUint16())
 	sfnt.Head.UnitsPerEm = r.ReadUint16()
 	created := r.ReadUint64()
 	modified := r.ReadUint64()
@@ -701,7 +715,7 @@ func (sfnt *SFNT) parseHead() error {
 	sfnt.Head.YMin = r.ReadInt16()
 	sfnt.Head.XMax = r.ReadInt16()
 	sfnt.Head.YMax = r.ReadInt16()
-	sfnt.Head.MacStyle = uint16ToFlags(r.ReadUint16())
+	sfnt.Head.MacStyle = Uint16ToFlags(r.ReadUint16())
 	sfnt.Head.LowestRecPPEM = r.ReadUint16()
 	sfnt.Head.FontDirectionHint = r.ReadInt16()
 	sfnt.Head.IndexToLocFormat = r.ReadInt16()
@@ -739,7 +753,7 @@ func (sfnt *SFNT) parseHhea() error {
 	}
 
 	sfnt.Hhea = &hheaTable{}
-	r := newBinaryReader(b)
+	r := NewBinaryReader(b)
 	majorVersion := r.ReadUint16()
 	minorVersion := r.ReadUint16()
 	if majorVersion != 1 && minorVersion != 0 {
@@ -794,7 +808,7 @@ func (sfnt *SFNT) parseVhea() error {
 	}
 
 	sfnt.Vhea = &vheaTable{}
-	r := newBinaryReader(b)
+	r := NewBinaryReader(b)
 	majorVersion := r.ReadUint16()
 	minorVersion := r.ReadUint16()
 	if majorVersion != 1 && minorVersion != 0 && minorVersion != 1 {
@@ -863,7 +877,7 @@ func (sfnt *SFNT) parseHmtx() error {
 	sfnt.Hmtx.HMetrics = make([]hmtxLongHorMetric, sfnt.Hhea.NumberOfHMetrics)
 	sfnt.Hmtx.LeftSideBearings = make([]int16, sfnt.Maxp.NumGlyphs-sfnt.Hhea.NumberOfHMetrics)
 
-	r := newBinaryReader(b)
+	r := NewBinaryReader(b)
 	for i := 0; i < int(sfnt.Hhea.NumberOfHMetrics); i++ {
 		sfnt.Hmtx.HMetrics[i].AdvanceWidth = r.ReadUint16()
 		sfnt.Hmtx.HMetrics[i].LeftSideBearing = r.ReadInt16()
@@ -919,7 +933,7 @@ func (sfnt *SFNT) parseVmtx() error {
 	sfnt.Vmtx.VMetrics = make([]vmtxLongVerMetric, sfnt.Vhea.NumberOfVMetrics)
 	sfnt.Vmtx.TopSideBearings = make([]int16, sfnt.Maxp.NumGlyphs-sfnt.Vhea.NumberOfVMetrics)
 
-	r := newBinaryReader(b)
+	r := NewBinaryReader(b)
 	for i := 0; i < int(sfnt.Vhea.NumberOfVMetrics); i++ {
 		sfnt.Vmtx.VMetrics[i].AdvanceHeight = r.ReadUint16()
 		sfnt.Vmtx.VMetrics[i].TopSideBearing = r.ReadInt16()
@@ -982,7 +996,7 @@ func (sfnt *SFNT) parseKern() error {
 		return fmt.Errorf("kern: bad table")
 	}
 
-	r := newBinaryReader(b)
+	r := NewBinaryReader(b)
 	version := r.ReadUint16()
 	if version != 0 {
 		// TODO: supported other kern versions
@@ -1005,7 +1019,7 @@ func (sfnt *SFNT) parseKern() error {
 		}
 		length := r.ReadUint16()
 		format := r.ReadUint8()
-		subtable.Coverage = uint8ToFlags(r.ReadUint8())
+		subtable.Coverage = Uint8ToFlags(r.ReadUint8())
 		if format != 0 {
 			// TODO: supported other kern subtable formats
 			continue
@@ -1063,7 +1077,7 @@ func (sfnt *SFNT) parseMaxp() error {
 	}
 
 	sfnt.Maxp = &maxpTable{}
-	r := newBinaryReader(b)
+	r := NewBinaryReader(b)
 	version := r.ReadBytes(4)
 	sfnt.Maxp.NumGlyphs = r.ReadUint16()
 	if binary.BigEndian.Uint32(version) == 0x00005000 && !sfnt.IsTrueType && len(b) == 6 {
@@ -1148,7 +1162,7 @@ func (sfnt *SFNT) parseName() error {
 	}
 
 	sfnt.Name = &nameTable{}
-	r := newBinaryReader(b)
+	r := NewBinaryReader(b)
 	version := r.ReadUint16()
 	if version != 0 && version != 1 {
 		return fmt.Errorf("name: bad version")
@@ -1257,7 +1271,7 @@ func (sfnt *SFNT) parseOS2() error {
 		return fmt.Errorf("OS/2: bad table")
 	}
 
-	r := newBinaryReader(b)
+	r := NewBinaryReader(b)
 	sfnt.OS2 = &os2Table{}
 	sfnt.OS2.Version = r.ReadUint16()
 	if 5 < sfnt.OS2.Version {
@@ -1428,7 +1442,7 @@ func (sfnt *SFNT) parsePost() error {
 	_, isCFF2 := sfnt.Tables["CFF2"]
 
 	sfnt.Post = &postTable{}
-	r := newBinaryReader(b)
+	r := NewBinaryReader(b)
 	version := r.ReadUint32()
 	sfnt.Post.ItalicAngle = r.ReadUint32()
 	sfnt.Post.UnderlinePosition = r.ReadInt16()
@@ -1482,28 +1496,28 @@ func (sfnt *SFNT) parsePost() error {
 
 ////////////////////////////////////////////////////////////////
 
-type scriptList struct {
-	Data []byte
-}
-
-type featureList struct {
-	Data []byte
-}
-
-type lookupList struct {
-	Data []byte
-}
-
-type featureVariations struct {
-	Data []byte
-}
-
-type gposTable struct {
-	Scripts           scriptList
-	Features          featureList
-	Lookup            lookupList
-	FeatureVariations featureVariations
-}
+//type scriptList struct {
+//	Data []byte
+//}
+//
+//type featureList struct {
+//	Data []byte
+//}
+//
+//type lookupList struct {
+//	Data []byte
+//}
+//
+//type featureVariations struct {
+//	Data []byte
+//}
+//
+//type gposTable struct {
+//	Scripts           scriptList
+//	Features          featureList
+//	Lookup            lookupList
+//	FeatureVariations featureVariations
+//}
 
 //func (sfnt *SFNT) parseGpos() error {
 //	b, ok := sfnt.Tables["GPOS"]
@@ -1514,7 +1528,7 @@ type gposTable struct {
 //	}
 //
 //	sfnt.Gpos = &gposTable{}
-//	r := newBinaryReader(b)
+//	r := NewBinaryReader(b)
 //	majorVersion := r.ReadUint16()
 //	minorVersion := r.ReadUint16()
 //	if majorVersion != 1 && minorVersion != 0 && minorVersion != 1 {

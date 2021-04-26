@@ -7,6 +7,7 @@ import (
 	"time"
 )
 
+// Subset regenerates a font file containing only the passed glyphIDs, thereby resulting in a significant size reduction. The glyphIDs will apear in the specified order in the file, and their dependencies are added to the end. It returns the compressed font file and the glyphIDs in the order in which they appear.
 func (sfnt *SFNT) Subset(glyphIDs []uint16) ([]byte, []uint16) {
 	if sfnt.IsCFF {
 		// TODO: support CFF
@@ -25,7 +26,10 @@ func (sfnt *SFNT) Subset(glyphIDs []uint16) ([]byte, []uint16) {
 	// add dependencies for composite glyphs
 	origLen := len(glyphIDs)
 	for i := 0; i < origLen; i++ {
-		deps, _ := sfnt.Glyf.Dependencies(glyphIDs[i], 0)
+		deps, err := sfnt.Glyf.Dependencies(glyphIDs[i], 0)
+		if err != nil {
+			panic(err)
+		}
 		for _, glyphID := range deps[1:] {
 			if _, ok := glyphMap[glyphID]; !ok {
 				subsetGlyphID := uint16(len(glyphIDs))
@@ -83,7 +87,7 @@ func (sfnt *SFNT) Subset(glyphIDs []uint16) ([]byte, []uint16) {
 	sort.Strings(tags)
 
 	// write header
-	w := newBinaryWriter([]byte{})
+	w := NewBinaryWriter([]byte{})
 	if sfnt.IsTrueType {
 		w.WriteUint32(0x00010000) // sfntVersion
 	} else if sfnt.IsCFF {
@@ -326,10 +330,10 @@ func (sfnt *SFNT) Subset(glyphIDs []uint16) ([]byte, []uint16) {
 		copy(buf[pos:], []byte(tag))
 		padding := (4 - lengths[i]&3) & 3
 		checksum := calcChecksum(buf[offsets[i] : offsets[i]+lengths[i]+padding])
-		binary.BigEndian.PutUint32(w.buf[pos+4:], checksum)
-		binary.BigEndian.PutUint32(w.buf[pos+8:], offsets[i])
-		binary.BigEndian.PutUint32(w.buf[pos+12:], lengths[i])
+		binary.BigEndian.PutUint32(buf[pos+4:], checksum)
+		binary.BigEndian.PutUint32(buf[pos+8:], offsets[i])
+		binary.BigEndian.PutUint32(buf[pos+12:], lengths[i])
 	}
-	binary.BigEndian.PutUint32(w.buf[checksumAdjustmentPos:], 0xB1B0AFBA-calcChecksum(buf))
+	binary.BigEndian.PutUint32(buf[checksumAdjustmentPos:], 0xB1B0AFBA-calcChecksum(buf))
 	return buf, glyphIDs
 }

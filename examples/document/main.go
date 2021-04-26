@@ -5,7 +5,7 @@ import (
 	"os"
 
 	"github.com/tdewolff/canvas"
-	"github.com/tdewolff/canvas/rasterizer"
+	"github.com/tdewolff/canvas/renderers/rasterizer"
 )
 
 var fontFamily *canvas.FontFamily
@@ -18,6 +18,8 @@ func main() {
 
 	c := canvas.New(200, 230)
 	ctx := canvas.NewContext(c)
+	ctx.SetFillColor(canvas.White)
+	ctx.DrawPath(0, 0, canvas.Rectangle(c.W, c.H))
 	draw(ctx)
 	c.WriteFile("out.png", rasterizer.PNGWriter(5.0))
 }
@@ -46,7 +48,7 @@ func draw(c *canvas.Context) {
 	drawText(c, 30.0, canvas.NewTextBox(headerFace, "Document Example", 0.0, 0.0, canvas.Left, canvas.Top, 0.0, 0.0))
 	drawText(c, 30.0, canvas.NewTextBox(textFace, lorem[0], 140.0, 0.0, canvas.Justify, canvas.Top, 5.0, 0.0))
 
-	lenna, err := os.Open("../lenna.png")
+	lenna, err := os.Open("../../resources/lenna.png")
 	if err != nil {
 		panic(err)
 	}
@@ -54,10 +56,10 @@ func draw(c *canvas.Context) {
 	if err != nil {
 		panic(err)
 	}
-	imgDPM := 15.0
-	imgWidth := float64(img.Bounds().Max.X) / imgDPM
-	imgHeight := float64(img.Bounds().Max.Y) / imgDPM
-	c.DrawImage(170.0-imgWidth, y-imgHeight, img, imgDPM)
+	imgDPMM := 15.0
+	imgWidth := float64(img.Bounds().Max.X) / imgDPMM
+	imgHeight := float64(img.Bounds().Max.Y) / imgDPMM
+	c.DrawImage(170.0-imgWidth, y-imgHeight, img, canvas.DPMM(imgDPMM))
 
 	drawText(c, 30.0, canvas.NewTextBox(textFace, lorem[1], 140.0-imgWidth-10.0, 0.0, canvas.Justify, canvas.Top, 5.0, 0.0))
 	drawText(c, 30.0, canvas.NewTextBox(textFace, lorem[2], 140.0, 0.0, canvas.Justify, canvas.Top, 5.0, 0.0))

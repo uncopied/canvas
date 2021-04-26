@@ -10,7 +10,7 @@ import (
 	"strconv"
 
 	"github.com/tdewolff/canvas"
-	"github.com/tdewolff/canvas/rasterizer"
+	"github.com/tdewolff/canvas/renderers/rasterizer"
 )
 
 var fontFamily *canvas.FontFamily
@@ -23,6 +23,8 @@ func main() {
 
 	c := canvas.New(140, 110)
 	ctx := canvas.NewContext(c)
+	ctx.SetFillColor(canvas.White)
+	ctx.DrawPath(0, 0, canvas.Rectangle(c.W, c.H))
 	draw(ctx)
 	c.WriteFile("out.png", rasterizer.PNGWriter(5.0))
 }

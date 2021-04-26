@@ -44,14 +44,13 @@ func (table *tablePositions) HasOverlap() bool {
 	return false
 }
 
-// ParseWOFF parses the WOFF font format and returns its contained SFNT font format (TTF or OTF).
-// See https://www.w3.org/TR/WOFF/
+// ParseWOFF parses the WOFF font format and returns its contained SFNT font format (TTF or OTF). See https://www.w3.org/TR/WOFF/
 func ParseWOFF(b []byte) ([]byte, error) {
 	if len(b) < 44 {
 		return nil, ErrInvalidFontData
 	}
 
-	r := newBinaryReader(b)
+	r := NewBinaryReader(b)
 	signature := r.ReadString(4)
 	if signature != "wOFF" {
 		return nil, fmt.Errorf("bad signature")
@@ -143,7 +142,7 @@ func ParseWOFF(b []byte) ([]byte, error) {
 	if MaxMemory < totalSfntSize {
 		return nil, ErrExceedsMemory
 	}
-	w := newBinaryWriter(make([]byte, totalSfntSize))
+	w := NewBinaryWriter(make([]byte, totalSfntSize))
 	w.WriteString(flavor)
 	w.WriteUint16(numTables)
 	w.WriteUint16(searchRange)
@@ -207,18 +206,17 @@ func ParseWOFF(b []byte) ([]byte, error) {
 	}
 	if w.Len() != totalSfntSize {
 		return nil, ErrInvalidFontData
+	} else if checksumAdjustmentPos == 0 {
+		return nil, ErrInvalidFontData
 	}
 
-	if checksumAdjustmentPos == 0 {
-		return nil, ErrInvalidFontData
-	} else {
-		checksum := 0xB1B0AFBA - calcChecksum(w.Bytes())
-		// TODO: (WOFF) master checksum seems right, but we don't throw an error if it is off
-		//if checkSumAdjustment != checksum {
-		//	return nil, fmt.Errorf("bad checksum")
-		//}
-		checksumAdjustment = checksum
-	}
+	checksum := 0xB1B0AFBA - calcChecksum(w.Bytes())
+	_ = checksumAdjustment
+	// TODO: (WOFF) master checksum seems right, but we don't throw an error if it is off
+	//if checksumAdjustment != checksum {
+	//	return nil, fmt.Errorf("bad checksum")
+	//}
+	checksumAdjustment = checksum
 
 	// replace overal checksum in head table
 	buf := w.Bytes()

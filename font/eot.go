@@ -4,10 +4,9 @@ import (
 	"fmt"
 )
 
-// ParseEOT parses the EOT font format and returns its contained SFNT font format (TTF or OTF).
-// See https://www.w3.org/Submission/EOT/
+// ParseEOT parses the EOT font format and returns its contained SFNT font format (TTF or OTF). See https://www.w3.org/Submission/EOT/
 func ParseEOT(b []byte) ([]byte, error) {
-	r := newBinaryReader(b)
+	r := NewBinaryReader(b)
 	_ = r.ReadUint32LE()             // EOTSize
 	fontDataSize := r.ReadUint32LE() // FontDataSize
 	version := r.ReadUint32LE()      // Version
